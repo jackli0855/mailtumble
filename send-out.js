@@ -3,7 +3,7 @@ const SQS = new AWS.SQS({ apiVersion: '2012-11-05' })
 const SES = new AWS.SES()
 
 const QUEUE_URL = "https://sqs.us-west-2.amazonaws.com/103494865495/NeedSendEmailQuence"
-const MAXIMUM_SEND_RATE = 14
+const MAXIMUM_SEND_RATE = 30
 
 function sendEmail(message) {
     let data = JSON.parse(message.Body)
@@ -74,7 +74,7 @@ function pollIteration(results) {
     const params = {
         QueueUrl: QUEUE_URL,
         MaxNumberOfMessages: 10,
-        VisibilityTimeout: 5,
+        VisibilityTimeout: 10,
         WaitTimeSeconds: 5
     };
 

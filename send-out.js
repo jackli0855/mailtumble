@@ -1,36 +1,48 @@
-const AWS = require('aws-sdk')
-const SQS = new AWS.SQS({ apiVersion: '2012-11-05' })
-const SES = new AWS.SES()
+const AWS = require('aws-sdk');
+const SQS = new AWS.SQS({ apiVersion: '2012-11-05' });
+const SES = new AWS.SES();
 
-const QUEUE_URL = "https://sqs.us-west-2.amazonaws.com/103494865495/NeedSendEmailQuence"
-const MAXIMUM_SEND_RATE = 30
+const QUEUE_URL = "https://sqs.us-west-2.amazonaws.com/103494865495/NeedSendEmailQuence";
+const MAXIMUM_SEND_RATE = 30;
 
 function sendEmail(message) {
-    let data = JSON.parse(message.Body)
-    let subject = "A Message To You Rudy"
-    if (data.subject !== "") subject = data.subject
+    let data = JSON.parse(message.Body);
+    let subject = "A Message To You Rudy";
+    if (data.subject !== "") subject = decodeURIComponent(data.subject);
+    var messageBody = {}
+    if (data.content_type == 'html') {
+        messageBody = {
+            Html: {
+               Charset: "UTF-8",
+               Data: decodeURIComponent(data.body)
+              }
+        };
+    }else{
+        messageBody = {
+            Text: {
+               Charset: "UTF-8",
+               Data: decodeURIComponent(data.body)
+              }
+        };
+    }
     var params = {
-        Destination: { ToAddresses: [data.to] },
-        Source: data.from,
+        Destination: { ToAddresses: [decodeURIComponent(data.to)] },
+        Source: decodeURIComponent(data.from),
         Message: {
            Subject: {
-              Data: subject
+              Data: decodeURIComponent(subject)
            },
-           Body: {
-               Text: {
-                   Data: data.body,
-               }
-            }
+           Body: messageBody
        }
     }
     
     return new Promise(function(resolve, reject) {
         SES.sendEmail(params, function(err, data) {
             if (err) {
-               console.log(err)
-               reject(new Error("Error: Email sending failed."))
+               console.log(err);
+               reject(new Error("Error: Email sending failed."));
              } else {
-               resolve("Sent email successfully to")
+               resolve("Sent email successfully to");
              }
         })
     })
@@ -45,10 +57,11 @@ function processMessage(message) {
 
         return new Promise((resolve, reject) => {
             SQS.deleteMessage(params, (err) => {
+                console.log('sql deleteMessage deleteMessage');
                 if (err) {
-                    reject(err)
+                    reject(err);
                 } else {
-                    resolve()
+                    resolve();
                 }
             });
         })
@@ -69,11 +82,11 @@ function getQueueData() {
 }
 
 function pollIteration(results) {
-  // console.log('========== pollIteration ===========')
+   console.log('========== pollIteration ===========')
     const delay = 0
     const params = {
         QueueUrl: QUEUE_URL,
-        MaxNumberOfMessages: 10,
+        MaxNumberOfMessages: 8,
         VisibilityTimeout: 10,
         WaitTimeSeconds: 5
     };
@@ -83,16 +96,16 @@ function pollIteration(results) {
             if (err) return reject(err);
 
             if (! data.Messages) {
-                setTimeout(() => resolve(results.concat('Queue seems to be empty!')), delay)
+                setTimeout(() => resolve(results.concat('Queue seems to be empty!')), delay);
             } else {
                 const promises = data.Messages.map((message) => processMessage(message));
-                console.log(`${data.Messages.length} jobs received from the queue`)
+                console.log(`${data.Messages.length} jobs received from the queue`);
 
                 // complete when all invocations have been made
                 Promise.series(promises).then(() => {
                     const result = [`Messages processed: ${data.Messages.length}`, data.Messages.length];
                     console.log(result);
-                    setTimeout(() => resolve(results.concat(result)), delay)
+                    setTimeout(() => resolve(results.concat(result)), delay);
                 });
             }
         });
@@ -100,10 +113,14 @@ function pollIteration(results) {
 }
 
 function poll() {
-  // console.log('========== poll() ===========')
-    const promises = Array(8).fill(pollIteration)
-
-    return Promise.series(promises, [])
+   console.log('========== poll() ===========')
+    const concurrency = 8;
+    // const promises = Array(1).fill(pollIteration);
+    const promises = Array(concurrency);
+    for(let i = 0; i < concurrency; i++){
+      promises[i] = pollIteration;
+    }
+    return Promise.series(promises, []);
 }
 
 exports.handler = (event, context, callback) => {
@@ -111,7 +128,7 @@ exports.handler = (event, context, callback) => {
     try {
         // Run orchestration (invoked by schedule)
         getQueueData().then((numItems) => {
-            console.log(`========= all messages count: ${numItems}`)
+            console.log(`========= all messages count: ${numItems}`);
             // Choose concurrency level
             const concurrency = Math.min(MAXIMUM_SEND_RATE, Math.max(1, Math.round(parseInt(numItems) / 15)));
             var promises = Array(concurrency);
@@ -119,18 +136,18 @@ exports.handler = (event, context, callback) => {
               promises[i] = poll();
             }
             // const promises = Array(concurrency).fill(poll())
-            console.log(promises)
-            console.log(`Launching ${concurrency} workers`)
+            console.log(promises);
+            console.log(`Launching ${concurrency} workers`);
 
             Promise.all(promises).then((results) => {
                 // console.log(results)
                 let totalMsg = results.reduce((accumulator, currentValue) => {
                   if(Array.isArray(accumulator)){
-                    accumulator = accumulator[1] + currentValue[1]
+                    accumulator = accumulator[1] + currentValue[1];
                   }else{
-                    accumulator += currentValue[1]  
+                    accumulator += currentValue[1];
                   }
-                  return accumulator
+                  return accumulator;
                 });
                 callback(null, `end end end all messages count:${totalMsg}`);
             });
@@ -141,9 +158,12 @@ exports.handler = (event, context, callback) => {
 };
 
 Promise.series = function(promises, initValue) {
-  console.log('======== Promise.series')
+  console.log('======== Promise.series');
+
     return promises.reduce(function(chain, promise) {
-        console.log(promise)
+        console.log('Promise.series reduce ---------');
+        console.log(promise);
+        console.log(typeof promise);
         // if (typeof promise !== 'function') {
         //     return Promise.reject(new Error("Error: Invalid promise item: " +
         //         promise));

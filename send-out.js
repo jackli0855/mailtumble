@@ -2,7 +2,7 @@ const AWS = require('aws-sdk');
 const SQS = new AWS.SQS({ apiVersion: '2012-11-05' });
 const SES = new AWS.SES();
 
-const QUEUE_URL = "https://sqs.us-west-2.amazonaws.com/103494865495/NeedSendEmailQuence";
+const QUEUE_URL = "https://****";
 const MAXIMUM_SEND_RATE = 30;
 
 function sendEmail(message) {
